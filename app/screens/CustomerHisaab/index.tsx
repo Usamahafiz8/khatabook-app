@@ -30,7 +30,9 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
       setLoading(true)
       const db = await getDBConnection();
       const currentDate = moment().format('M/D/YYYY');
-      const data = await getTransactionsAndBalance(db, parseInt(user_id || "0"), start || startDate || "1/1/2001", end || endDate || currentDate)
+      const effectiveStart = start || (startDate && startDate.trim() ? startDate : "1/1/2001");
+      const effectiveEnd = end || (endDate && endDate.trim() ? endDate : currentDate);
+      const data = await getTransactionsAndBalance(db, parseInt(user_id || "0"), effectiveStart, effectiveEnd)
       if (data) {
         // console.log(data)
         setEntries(data.transactions)
@@ -207,8 +209,8 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
 
   const renderItem = ({ item }: any) => (
     <Pressable style={styles.tableRow} key={item.id} onPress={() => {
-      setItem(item)
-      handleDeletion(item.id)
+      setItem(item);
+      handleDeletion(item.id);
       }}>
     <View style={styles.infoColumn}>
       <View style={{flexDirection:'row',alignItems:'center',gap:5}}>
@@ -355,7 +357,12 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
       </View>
       <UpdateTransactionModal   
         visible={updateModal}  
-        onClose={setUpdateModal} 
+        onClose={(value) => {
+          setUpdateModal(value);
+          if (!value) {
+            setItem(null);
+          }
+        }} 
         transactionId={item?.id} 
         person_id={user_id}
         amount={item?.amount} 

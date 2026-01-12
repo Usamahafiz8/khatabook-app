@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestMediaPermissions } from '../../components/Permissions';
 import { NativeModules } from 'react-native';
 
-const { ManageExternalStorage } = NativeModules;
+const { ManageExternalStorage } = Platform.OS === 'android' ? NativeModules : {};
 
 type RootStackParamList = {
   Login: any;
@@ -25,23 +25,35 @@ type Props = {
 const LoginScreen = ({ navigation }: Props) => {
 
   async function checkPermission() {
-    const hasPermission = await ManageExternalStorage.hasPermission();
-    if (!hasPermission) {
-      requestPermission();
+    if (Platform.OS === 'android' && ManageExternalStorage) {
+      try {
+        const hasPermission = await ManageExternalStorage.hasPermission();
+        if (!hasPermission) {
+          requestPermission();
+        }
+      } catch (error) {
+        console.warn('Error checking permission:', error);
+      }
     }
   }
   
   // Request permission
   function requestPermission() {
-    ManageExternalStorage.requestPermission();
+    if (Platform.OS === 'android' && ManageExternalStorage) {
+      try {
+        ManageExternalStorage.requestPermission();
+      } catch (error) {
+        console.warn('Error requesting permission:', error);
+      }
+    }
   }
   const initializeDB = async () => {
-  //   if (Platform.OS === "android") {
-  //   await requestMediaPermissions();
-  // }
-  // if(Platform.Version !== 29){
-    checkPermission()
-  // }
+    if (Platform.OS === "android") {
+      await requestMediaPermissions();
+    }
+    if (Platform.OS === 'android') {
+      checkPermission();
+    }
     const db = await getDBConnection();
     await createUserTable(db);
   };

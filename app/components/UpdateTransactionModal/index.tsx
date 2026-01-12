@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,12 +25,22 @@ const UpdateTransactionModal = ({
   refreshTransactions,
 }:any) => {
   console.log(description?.toString())
-  const [price, setPrice] = useState(amount?.toString());
-  const [description1, setDescription] = useState(description?.toString());
+  const [price, setPrice] = useState(amount?.toString() || '');
+  const [description1, setDescription] = useState(description?.toString() || '');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (visible && transactionId) {
+      setPrice(amount?.toString() || '');
+      setDescription(description?.toString() || '');
+    } else {
+      setPrice('');
+      setDescription('');
+    }
+  }, [visible, transactionId, amount, description]);
+
   const handleUpdate = async () => {
-    if (price && description) {
+    if (price && description1) {
       try {
         setLoading(true);
         const db = await getDBConnection();
@@ -91,7 +101,7 @@ const UpdateTransactionModal = ({
 
             <TouchableOpacity
               style={[styles.button, styles.cancelButton]}
-              onPress={onClose}
+              onPress={() => onClose(false)}
               disabled={loading}
             >
               <Text style={styles.buttonText}>Cancel</Text>
