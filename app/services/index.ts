@@ -1,6 +1,6 @@
 import { enablePromise, openDatabase, SQLiteDatabase } from 'react-native-sqlite-storage';
 import RNFS from 'react-native-fs';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import Share from 'react-native-share';
 import moment from 'moment';
 
@@ -11,11 +11,21 @@ const transactions = 'transactions';
 enablePromise(true);
 
 export const getDBConnection = async () => {
-    const databaseName = 'khata.db'
-    // let databasePath = `${RNFS.DocumentDirectoryPath}/${databaseName}`
-    // let databasePath = `/storage/emulated/0/Documents/${databaseName}`
-
-    return openDatabase({ name: databaseName, location: 'Shared' });
+    const databaseName = 'khata.db';
+    
+    // iOS doesn't support 'Shared' location, use 'default' or omit location
+    if (Platform.OS === 'ios') {
+        return openDatabase({ 
+            name: databaseName, 
+            location: 'default' 
+        });
+    } else {
+        // Android can use 'Shared' location
+        return openDatabase({ 
+            name: databaseName, 
+            location: 'Shared' 
+        });
+    }
 };
 
 
