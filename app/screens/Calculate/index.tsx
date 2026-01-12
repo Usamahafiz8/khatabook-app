@@ -100,6 +100,9 @@ const CalculateScreen = ({ route, navigation }: any) => {
   const handleDateChange = (event: any, selectedDate: Date | undefined) => {
     if (Platform.OS === 'android') {
       setShowDatePicker(false);
+      if (event.type === 'dismissed') {
+        return;
+      }
     }
     if (selectedDate) {
       const formattedDate = moment(selectedDate).format('M/D/YYYY');
@@ -113,6 +116,9 @@ const CalculateScreen = ({ route, navigation }: any) => {
   const handleTimeChange = (event: any, selectedTime: Date | undefined) => {
     if (Platform.OS === 'android') {
       setShowTimePicker(false);
+      if (event.type === 'dismissed') {
+        return;
+      }
     }
     if (selectedTime) {
       const formattedTime = moment(selectedTime).format('h:mm:ss A');
@@ -291,56 +297,79 @@ const CalculateScreen = ({ route, navigation }: any) => {
         </TouchableOpacity>
       </View>
 
-      {/* Date Picker Modal */}
-      <Modal
-        visible={showDatePicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Date</Text>
-              <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                {/* <Ionicons name="close" size={normalize(24)} color="#333" /> */}
-              </TouchableOpacity>
+      {/* Date Picker - Android shows as system dialog, iOS in modal */}
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={showDatePicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowDatePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Date</Text>
+                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+                  {/* <Ionicons name="close" size={normalize(24)} color="#333" /> */}
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={date ? moment(date, 'M/D/YYYY').toDate() : new Date()}
+                mode="date"
+                display="spinner"
+                onChange={handleDateChange}
+                maximumDate={new Date()}
+              />
             </View>
-            <DateTimePicker
-              value={date ? moment(date, 'M/D/YYYY').toDate() : new Date()}
-              mode="date"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
-              maximumDate={new Date()}
-            />
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      ) : (
+        showDatePicker && (
+          <DateTimePicker
+            value={date ? moment(date, 'M/D/YYYY').toDate() : new Date()}
+            mode="date"
+            display="default"
+            onChange={handleDateChange}
+            maximumDate={new Date()}
+          />
+        )
+      )}
 
-      {/* Time Picker Modal */}
-      <Modal
-        visible={showTimePicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowTimePicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Time</Text>
-              <TouchableOpacity onPress={() => setShowTimePicker(false)}>
-                <Ionicons name="close" size={normalize(24)} color="#333" />
-              </TouchableOpacity>
+      {/* Time Picker - Android shows as system dialog, iOS in modal */}
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={showTimePicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowTimePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Time</Text>
+                <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+                  <Ionicons name="close" size={normalize(24)} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <DateTimePicker
+                value={time ? moment(time, 'h:mm:ss A').toDate() : new Date()}
+                mode="time"
+                display="spinner"
+                onChange={handleTimeChange}
+              />
             </View>
-            <DateTimePicker
-              value={time ? moment(time, 'h:mm:ss A').toDate() : new Date()}
-              mode="time"
-              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleTimeChange}
-            />
           </View>
-        </View>
-      </Modal>
+        </Modal>
+      ) : (
+        showTimePicker && (
+          <DateTimePicker
+            value={time ? moment(time, 'h:mm:ss A').toDate() : new Date()}
+            mode="time"
+            display="default"
+            onChange={handleTimeChange}
+          />
+        )
+      )}
     </View>
   );
 };
