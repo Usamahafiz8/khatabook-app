@@ -446,7 +446,7 @@ const HisaabScreen = ({ route, navigation }: any) => {
       </View>
       <UpdateTransactionModal   
         visible={updateModal}  
-        onClose={(value) => {
+        onClose={(value: boolean) => {
           setUpdateModal(value);
           if (!value) {
             setItem(null);

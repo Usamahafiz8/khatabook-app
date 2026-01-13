@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requestMediaPermissions } from '../../components/Permissions';
 import { NativeModules } from 'react-native';
 
-const { ManageExternalStorage } = Platform.OS === 'android' ? NativeModules : {};
+const { ManageExternalStorage } = Platform.OS === 'android' ? NativeModules : { ManageExternalStorage: undefined };
 
 type RootStackParamList = {
   Login: any;

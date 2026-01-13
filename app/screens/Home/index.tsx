@@ -32,9 +32,18 @@ const HomeScreen = ({ navigation }: any) => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerList, setCustomerList] = useState<{ id: number, name: string; mobile_number: string | null; balance: number }[]>([]);
   const [supplierList, setSupplierList] = useState<{ id: number, name: string; mobile_number: string | null; balance: number }[]>([]);
+  const [originalCustomerList, setOriginalCustomerList] = useState<{ id: number, name: string; mobile_number: string | null; balance: number }[]>([]);
+  const [originalSupplierList, setOriginalSupplierList] = useState<{ id: number, name: string; mobile_number: string | null; balance: number }[]>([]);
+  const [originalBalanceSheetData, setOriginalBalanceSheetData] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [search, setSearch] = useState('');
+  
+  const [customerSearchInput, setCustomerSearchInput] = useState('');
+  const [customerSearchQuery, setCustomerSearchQuery] = useState('');
+  const [supplierSearchInput, setSupplierSearchInput] = useState('');
+  const [supplierSearchQuery, setSupplierSearchQuery] = useState('');
+  const [balanceSearchInput, setBalanceSearchInput] = useState('');
+  const [balanceSearchQuery, setBalanceSearchQuery] = useState('');
   const [total, setTotal] = useState({ total_credit: 0, total_debit: 0, remaining_debit: 0, remaining_credit: 0 });
   const [activeTab, setActiveTab] = useState(0);
   const [netBalance, setNetBalance] = useState(0);
@@ -61,9 +70,11 @@ const HomeScreen = ({ navigation }: any) => {
       }
       if (userType === "customer") {
         setCustomerList(data)
+        setOriginalCustomerList(data)
       }
       else {
         setSupplierList(data)
+        setOriginalSupplierList(data)
       }
     }
     catch (e) {
@@ -181,46 +192,6 @@ const HomeScreen = ({ navigation }: any) => {
     }
   };
 
-  const handleSearch = (key: string) => {
-    const lowerCaseKey = key.toLowerCase();
-    if (activeTab === 0) {
-      if (key.length > 0) {
-        const filtered = customerList.filter(
-          (item) =>
-            item.name.toLowerCase().includes(lowerCaseKey)
-        );
-        setCustomerList(filtered);
-      }
-      else {
-        getCustomerList("customer")
-      }
-    }
-    else if (activeTab === 1) {
-      if (key.length > 0) {
-        const filtered = supplierList.filter(
-          (item) =>
-            item.name.toLowerCase().includes(lowerCaseKey)
-        );
-        setSupplierList(filtered);
-      }
-      else {
-        getCustomerList("supplier")
-      }
-    }
-    else if (activeTab === 2) {
-      if (key.length > 0) {
-        const filtered = balanceSheetData.filter(
-          (item) =>
-            item.person_name.toLowerCase().includes(lowerCaseKey)
-        );
-        setBalanceSheetData(filtered);
-      }
-      else {
-        fetchBalanceSheetData();
-      }
-    }
-    setSearch(key)
-  };
 
   // const handleDeletion = async (id: number) => {
   //   try {
@@ -242,39 +213,60 @@ const HomeScreen = ({ navigation }: any) => {
   //   }
   // }
 
-  const renderList = (list: { id: number, name: string; mobile_number: string | null; balance: number }[], isCustomer: boolean) => (
-    <View style={styles.container}>
-      <View style={styles.cardsContainer}>
+  const renderList = (
+    list: { id: number, name: string; mobile_number: string | null; balance: number }[], 
+    isCustomer: boolean,
+    searchInput: string,
+    setSearchInput: (value: string) => void,
+    searchQuery: string,
+    setSearchQuery: (value: string) => void
+  ) => {
+    const filteredList = searchQuery.trim() 
+      ? list.filter((entry) => entry.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      : list;
+    
+    return (
+      <View style={styles.container}>
+        <View style={styles.cardsContainer}>
+          {loading ?
+            <ActivityIndicator size={"small"} color={"black"} /> :
+            <View style={[styles.card, { backgroundColor: '#B52126' }]}>
+              <Text style={styles.cardValue}>Rs. {isCustomer ? total.remaining_debit : total.remaining_debit}</Text>
+              <Text style={styles.cardText}>{isCustomer ? 'Manay Lene Hain' : 'Total Remaining'}</Text>
+            </View>
+          }
+          {loading ?
+            <ActivityIndicator size={"small"} color={"black"} /> :
+            <View style={[styles.card, { backgroundColor: '#0A7075' }]}>
+              <Text style={styles.cardValue}>Rs. {total.total_credit}</Text>
+              <Text style={styles.cardText}>{isCustomer ? 'Manay Liye Hn' : 'Total Purchase'}</Text>
+            </View>
+          }
+        </View>
+
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search ${isCustomer ? 'Customer' : 'Supplier'}`}
+            placeholderTextColor="#6BA3BE"
+            value={searchInput}
+            onChangeText={setSearchInput}
+            onSubmitEditing={() => setSearchQuery(searchInput)}
+            returnKeyType="search"
+          />
+          <TouchableOpacity
+            style={styles.searchButton}
+            onPress={() => setSearchQuery(searchInput)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="search" size={normalize(20)} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
         {loading ?
           <ActivityIndicator size={"small"} color={"black"} /> :
-          <View style={[styles.card, { backgroundColor: '#B52126' }]}>
-            <Text style={styles.cardValue}>Rs. {isCustomer ? total.remaining_debit : total.remaining_debit}</Text>
-            <Text style={styles.cardText}>{isCustomer ? 'Manay Lene Hain' : 'Total Remaining'}</Text>
-          </View>
-        }
-        {loading ?
-          <ActivityIndicator size={"small"} color={"black"} /> :
-          <View style={[styles.card, { backgroundColor: '#0A7075' }]}>
-            <Text style={styles.cardValue}>Rs. {total.total_credit}</Text>
-            <Text style={styles.cardText}>{isCustomer ? 'Manay Liye Hn' : 'Total Purchase'}</Text>
-          </View>
-        }
-      </View>
-
-      <TextInput
-        style={styles.searchInput}
-        placeholder={`Search ${isCustomer ? 'Customer' : 'Supplier'}`}
-        placeholderTextColor="#6BA3BE"
-        value={search}
-        onChangeText={(value) => handleSearch(value)}
-      />
-
-      {loading ?
-        <ActivityIndicator size={"small"} color={"black"} /> :
-        <ScrollView style={styles.customerList}>
-          {list
-            .filter((entry) => entry.name.toLowerCase().includes(search.toLowerCase()))
-            .map((entry, index) => (
+          <ScrollView style={styles.customerList} contentContainerStyle={styles.scrollContent}>
+            {filteredList.map((entry, index) => (
               <View key={index}>
                 <TouchableOpacity onPress={() => handleEntryClick(entry.id.toString(), entry.name, isCustomer,entry.mobile_number || "")}>
                   <View style={styles.customerItem}>
@@ -287,11 +279,9 @@ const HomeScreen = ({ navigation }: any) => {
             ))}
         </ScrollView>
       }
-      <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
-        <Text style={styles.addButtonText}>+ Add {isCustomer ? 'Customer' : 'Supplier'}</Text>
-      </TouchableOpacity>
     </View>
-  );
+    );
+  };
 
   const fetchBalanceSheetData = async (start?: string, end?: string) => {
     try {
@@ -304,6 +294,7 @@ const HomeScreen = ({ navigation }: any) => {
       const { khataList, totalReceived, totalSpent, netBalance } = await getKhataBalanceSheet(db, parseInt(userId || "0"), start || "1/18/2001", end || currentDate);
       // console.log(JSON.stringify({ khataList, totalReceived,totalSpent }))ß
       setBalanceSheetData(khataList);
+      setOriginalBalanceSheetData(khataList);
       setTotalBalance({
         totalSpent,
         totalReceived
@@ -545,13 +536,24 @@ const HomeScreen = ({ navigation }: any) => {
         }
       </View>
       {/* <Text style={styles.totalBalance}>Total Balance: Rs. {totalBalance.toFixed(2)}</Text> */}
-      <TextInput
-        style={styles.searchInput}
-        placeholder="Search All"
-        placeholderTextColor="#6BA3BE"
-        value={search}
-        onChangeText={(value) => handleSearch(value)}
-      />
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search All"
+          placeholderTextColor="#6BA3BE"
+          value={balanceSearchInput}
+          onChangeText={setBalanceSearchInput}
+          onSubmitEditing={() => setBalanceSearchQuery(balanceSearchInput)}
+          returnKeyType="search"
+        />
+        <TouchableOpacity
+          style={styles.searchButton}
+          onPress={() => setBalanceSearchQuery(balanceSearchInput)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="search" size={normalize(20)} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
       {loading ? (
         <ActivityIndicator size="large" color="#0A7075" />
       ) : (
@@ -561,7 +563,7 @@ const HomeScreen = ({ navigation }: any) => {
             <Text style={styles.tableHeaderText}>Type</Text>
             <Text style={styles.tableHeaderText}>Balance</Text>
           </View>
-          {balanceSheetData.length!=0 && balanceSheetData.map((item, index) => (
+          {(balanceSearchQuery.trim() ? originalBalanceSheetData.filter(item => item.person_name.toLowerCase().includes(balanceSearchQuery.toLowerCase())) : originalBalanceSheetData).length !== 0 && (balanceSearchQuery.trim() ? originalBalanceSheetData.filter(item => item.person_name.toLowerCase().includes(balanceSearchQuery.toLowerCase())) : originalBalanceSheetData).map((item, index) => (
             <View key={index} style={styles.tableRow}>
               <Text style={{...styles.tableCell,textAlign:'left'}}>{item?.person_name}</Text>
               <Text style={styles.tableCell}>{item?.customer_type}</Text>
@@ -575,15 +577,22 @@ const HomeScreen = ({ navigation }: any) => {
     </View>
   );
 
-  const renderScene = SceneMap({
-    customers: () => renderList(customerList, true),
-    suppliers: () => renderList(supplierList, false),
-    all: renderBalanceSheet,
-  });
+  const renderScene = ({ route }: any) => {
+    switch (route.key) {
+      case 'customers':
+        return renderList(originalCustomerList, true, customerSearchInput, setCustomerSearchInput, customerSearchQuery, setCustomerSearchQuery);
+      case 'suppliers':
+        return renderList(originalSupplierList, false, supplierSearchInput, setSupplierSearchInput, supplierSearchQuery, setSupplierSearchQuery);
+      case 'all':
+        return renderBalanceSheet();
+      default:
+        return null;
+    }
+  };
 
   // console.log(name)
   return (
-    <>
+    <View style={styles.mainContainer}>
       <View style={styles.header}>
         <Text style={styles.username}>{`Welcome ${name}`}</Text>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -611,6 +620,15 @@ const HomeScreen = ({ navigation }: any) => {
           />
         )}
       />
+      {activeTab !== 2 && (
+        <TouchableOpacity
+          style={styles.floatingAddButton}
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={normalize(28)} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
@@ -645,11 +663,15 @@ const HomeScreen = ({ navigation }: any) => {
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  mainContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -699,18 +721,59 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: '#FCF3DE',
   },
-  searchInput: {
-    height: 40,
-    borderColor: '#0A7075',
-    borderWidth: 1,
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 15,
-    paddingHorizontal: 10,
-    borderRadius: 10,
+    marginTop: 10,
+  },
+  searchInput: {
+    flex: 1,
+    height: 45,
+    borderColor: '#0A7075',
+    borderWidth: 1.5,
+    paddingHorizontal: 15,
+    borderRadius: 12,
     backgroundColor: '#ffffff',
     color: '#031716',
+    fontSize: 15,
+    marginRight: 10,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  searchButton: {
+    width: 45,
+    height: 45,
+    borderRadius: 12,
+    backgroundColor: '#0A7075',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   customerList: {
     marginVertical: 20,
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   customerItem: {
     flexDirection: 'row',
@@ -792,6 +855,22 @@ const styles = StyleSheet.create({
     color: '#FCF3DE',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  floatingAddButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 20,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#0A7075',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   totalBalance: {
     fontSize: 18,
