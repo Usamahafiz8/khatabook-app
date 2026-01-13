@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, Alert, ActivityIndicator, Pressable, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, ScrollView, Alert, ActivityIndicator, Pressable, TextInput, Platform, Modal, Dimensions } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { addTransaction, deletePerson, deleteTransaction, getDBConnection, getTransactionsAndBalance } from '../../services';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { UpdateTransactionModal } from '../../components';
 import moment from 'moment';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const scale = SCREEN_WIDTH / 320;
+const normalize = (size: number) => Math.round(scale * size);
 
 const CustomerHisaabScreen = ({ route, navigation }: any) => {
   const { customerName, currentBalance }: any = route.params;
@@ -75,8 +77,6 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
     }
   };
 
-  const [updateModal,setUpdateModal] = useState(false)
-  const [item,setItem] = useState<any>(null)
 
   const handleDeletion = async (id: number) => {
     // console.log(data)
@@ -90,8 +90,20 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
         },
         {
           text: "update",
-          onPress:()=>{
-            setUpdateModal(true)
+          onPress: () => {
+            const transaction = entries.find((item: any) => item.id === id);
+            if (transaction) {
+              const transactionType = transaction.payment_type === 'debit' ? 'Manay Diye' : 'Manay Liye';
+              navigation.navigate('Calculate', {
+                transactionType,
+                customerName,
+                user_id,
+                getTransactions,
+                transactionId: id,
+                editAmount: transaction.amount,
+                editDescription: transaction.description
+              });
+            }
           }
         },
         { 
@@ -145,29 +157,68 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
   
   const [startDate, setStartDate] = useState<string>('');
   const [isStartPickerVisible, setStartPickerVisibility] = useState<boolean>(false);
+  const [startMonth, setStartMonth] = useState(new Date().getMonth() + 1);
+  const [startDay, setStartDay] = useState(new Date().getDate());
+  const [startYear, setStartYear] = useState(new Date().getFullYear());
 
   // State variables for End Date
   const [endDate, setEndDate] = useState<string>('');
   const [isEndPickerVisible, setEndPickerVisibility] = useState<boolean>(false);
+  const [endMonth, setEndMonth] = useState(new Date().getMonth() + 1);
+  const [endDay, setEndDay] = useState(new Date().getDate());
+  const [endYear, setEndYear] = useState(new Date().getFullYear());
+
   const showStartDatePicker = () => {
+    if (startDate) {
+      const parsed = moment(startDate, 'M/D/YYYY', true);
+      if (parsed.isValid()) {
+        const d = parsed.toDate();
+        setStartMonth(d.getMonth() + 1);
+        setStartDay(d.getDate());
+        setStartYear(d.getFullYear());
+      }
+    }
     setStartPickerVisibility(true);
   };
   const showEndDatePicker = () => {
+    if (endDate) {
+      const parsed = moment(endDate, 'M/D/YYYY', true);
+      if (parsed.isValid()) {
+        const d = parsed.toDate();
+        setEndMonth(d.getMonth() + 1);
+        setEndDay(d.getDate());
+        setEndYear(d.getFullYear());
+      }
+    }
     setEndPickerVisibility(true);
   };
   const hideStartDatePicker = () => {
     setStartPickerVisibility(false);
   };
-  const handleStartDateChange = (event: any, selectedDate?: Date) => {
-    hideStartDatePicker();
-    if (selectedDate) {
-      const formattedDate = moment(selectedDate).format('M/D/YYYY');
-      setStartDate(formattedDate);
-      getTransactions(formattedDate, endDate || moment().format('M/D/YYYY'));
+  const handleStartDateConfirm = () => {
+    const selectedDate = moment(`${startMonth}/${startDay}/${startYear}`, 'M/D/YYYY');
+    if (!selectedDate.isValid()) {
+      Alert.alert('Error', 'Invalid date selected');
+      return;
     }
+    const formattedDate = selectedDate.format('M/D/YYYY');
+    setStartDate(formattedDate);
+    getTransactions(formattedDate, endDate || moment().format('M/D/YYYY'));
+    setStartPickerVisibility(false);
   };
 
   const hideEndDatePicker = () => {
+    setEndPickerVisibility(false);
+  };
+  const handleEndDateConfirm = () => {
+    const selectedDate = moment(`${endMonth}/${endDay}/${endYear}`, 'M/D/YYYY');
+    if (!selectedDate.isValid()) {
+      Alert.alert('Error', 'Invalid date selected');
+      return;
+    }
+    const formattedDate = selectedDate.format('M/D/YYYY');
+    getTransactions(startDate || "1/1/2001", formattedDate);
+    setEndDate(formattedDate);
     setEndPickerVisibility(false);
   };
 
@@ -196,20 +247,45 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
     setEntries(filtered);
   };
 
-  const handleEndDateChange = (event: any, selectedDate?: Date) => {
-    hideEndDatePicker();
-    if (selectedDate) {
-      const formattedDate = moment(selectedDate).format('M/D/YYYY');
-      // filterEntriesByDate(startDate, formattedDate);
-      getTransactions(startDate || "1/1/2001", formattedDate)
-      setEndDate(formattedDate);
-    }
-  }     
+  // Generate arrays for pickers
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+  const years = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
 
+  const renderPickerColumn = (
+    items: number[],
+    selectedValue: number,
+    onSelect: (value: number) => void,
+    formatValue?: (value: number) => string
+  ) => {
+    return (
+      <ScrollView
+        style={pickerStyles.pickerColumn}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={normalize(40)}
+        decelerationRate="fast"
+      >
+        {items.map((item, index) => {
+          const value = formatValue ? formatValue(item) : item.toString().padStart(2, '0');
+          const isSelected = item === selectedValue;
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[pickerStyles.pickerItem, isSelected && pickerStyles.pickerItemSelected]}
+              onPress={() => onSelect(item)}
+            >
+              <Text style={[pickerStyles.pickerItemText, isSelected && pickerStyles.pickerItemTextSelected]}>
+                {value}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    );
+  };
 
   const renderItem = ({ item }: any) => (
     <Pressable style={styles.tableRow} key={item.id} onPress={() => {
-      setItem(item);
       handleDeletion(item.id);
       }}>
     <View style={styles.infoColumn}>
@@ -292,23 +368,73 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
           />
         </TouchableOpacity>
       </View>
-      {isStartPickerVisible && (
-        <DateTimePicker
-          value={startDate ? moment(startDate, 'M/D/YYYY').toDate() : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleStartDateChange}
-        />
-      )}
 
-      {isEndPickerVisible && (
-        <DateTimePicker
-          value={endDate ? moment(endDate, 'M/D/YYYY').toDate() : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleEndDateChange}
-        />
-      )}
+      {/* Custom Start Date Picker Modal */}
+      <Modal
+        visible={isStartPickerVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={hideStartDatePicker}
+      >
+        <TouchableOpacity 
+          style={pickerStyles.modalOverlay}
+          activeOpacity={1}
+          onPress={hideStartDatePicker}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={pickerStyles.modalContent}>
+              <View style={pickerStyles.modalHeader}>
+                <Text style={pickerStyles.modalTitle}>Select Start Date</Text>
+                <TouchableOpacity onPress={hideStartDatePicker} style={pickerStyles.closeButton}>
+                  <Ionicons name="close" size={normalize(24)} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={pickerStyles.pickerContainer}>
+                {renderPickerColumn(months, startMonth, setStartMonth)}
+                {renderPickerColumn(days, startDay, setStartDay)}
+                {renderPickerColumn(years, startYear, setStartYear, (y) => y.toString())}
+              </View>
+              <TouchableOpacity style={pickerStyles.confirmButton} onPress={handleStartDateConfirm}>
+                <Text style={pickerStyles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Custom End Date Picker Modal */}
+      <Modal
+        visible={isEndPickerVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={hideEndDatePicker}
+      >
+        <TouchableOpacity 
+          style={pickerStyles.modalOverlay}
+          activeOpacity={1}
+          onPress={hideEndDatePicker}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={pickerStyles.modalContent}>
+              <View style={pickerStyles.modalHeader}>
+                <Text style={pickerStyles.modalTitle}>Select End Date</Text>
+                <TouchableOpacity onPress={hideEndDatePicker} style={pickerStyles.closeButton}>
+                  <Ionicons name="close" size={normalize(24)} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+              <View style={pickerStyles.pickerContainer}>
+                {renderPickerColumn(months, endMonth, setEndMonth)}
+                {renderPickerColumn(days, endDay, setEndDay)}
+                {renderPickerColumn(years, endYear, setEndYear, (y) => y.toString())}
+              </View>
+              <TouchableOpacity style={pickerStyles.confirmButton} onPress={handleEndDateConfirm}>
+                <Text style={pickerStyles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       <Text style={styles.customerName}>{customerName}</Text>
       {loading ?
         <ActivityIndicator size={"small"} color={"black"} /> :
@@ -355,20 +481,6 @@ const CustomerHisaabScreen = ({ route, navigation }: any) => {
           <Text style={styles.buttonText}>Manay liye</Text>
         </TouchableOpacity>
       </View>
-      <UpdateTransactionModal   
-        visible={updateModal}  
-        onClose={(value) => {
-          setUpdateModal(value);
-          if (!value) {
-            setItem(null);
-          }
-        }} 
-        transactionId={item?.id} 
-        person_id={user_id}
-        amount={item?.amount} 
-        description={item?.description} 
-        refreshTransactions={getTransactions}
-      />
     </View>
   );
 };
@@ -596,6 +708,104 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000000',
     marginHorizontal: 10,
+  },
+});
+
+const pickerStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: normalize(24),
+    borderTopRightRadius: normalize(24),
+    padding: normalize(24),
+    paddingBottom: normalize(48),
+    maxHeight: '85%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: normalize(24),
+    paddingBottom: normalize(18),
+    borderBottomWidth: 1,
+    borderBottomColor: '#E1E4E8',
+  },
+  modalTitle: {
+    fontSize: normalize(22),
+    fontWeight: '600',
+    color: '#111827',
+    letterSpacing: 0.3,
+  },
+  closeButton: {
+    padding: normalize(4),
+    borderRadius: normalize(20),
+  },
+  pickerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    height: normalize(200),
+    marginVertical: normalize(20),
+  },
+  pickerColumn: {
+    flex: 1,
+  },
+  pickerItem: {
+    height: normalize(40),
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: normalize(8),
+  },
+  pickerItemSelected: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: normalize(8),
+  },
+  pickerItemText: {
+    fontSize: normalize(16),
+    color: '#6B7280',
+  },
+  pickerItemTextSelected: {
+    fontSize: normalize(18),
+    fontWeight: '600',
+    color: '#0A7075',
+  },
+  confirmButton: {
+    backgroundColor: '#0A7075',
+    paddingVertical: normalize(14),
+    borderRadius: normalize(12),
+    alignItems: 'center',
+    marginTop: normalize(20),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0A7075',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  confirmButtonText: {
+    fontSize: normalize(16),
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });
 

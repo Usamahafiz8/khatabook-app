@@ -10,7 +10,6 @@ import {
   Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { Invoices } from '../../components';
 
 const ReportScreenCustomer = ({ route, navigation }: any) => {
@@ -125,24 +124,6 @@ const ReportScreenCustomer = ({ route, navigation }: any) => {
         </TouchableOpacity>
       </View> */}
 
-      {/* DateTime Pickers */}
-      {/* {isStartPickerVisible && (
-        <DateTimePicker
-          value={startDate ? new Date(startDate) : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleStartDateChange}
-        />
-      )}
-
-      {isEndPickerVisible && (
-        <DateTimePicker
-          value={endDate ? new Date(endDate) : new Date()}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleEndDateChange}
-        />
-      )} */}
 
       {/* Table Header */}
       <View style={styles.tableHeader}>

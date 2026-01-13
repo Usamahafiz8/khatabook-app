@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,10 @@ import {
   Alert,
   Dimensions,
   Modal,
+  ScrollView,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { addTransaction, getDBConnection } from '../../services';
+import { addTransaction, getDBConnection, updateTransaction } from '../../services';
 import moment from 'moment';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -21,11 +20,12 @@ const scale = SCREEN_WIDTH / 320;
 const normalize = (size: number) => Math.round(scale * size);
 
 const CalculateScreen = ({ route, navigation }: any) => {
-  const { transactionType, customerName, getTransactions, user_id }: any = route.params;
+  const { transactionType, customerName, getTransactions, user_id, transactionId, editAmount, editDescription }: any = route.params;
+  const isEditMode = !!transactionId;
   const now = new Date();
   const [time, setTime] = useState(moment(now).format('h:mm:ss A'));
-  const [amount, setAmount] = useState('');
-  const [details, setDetails] = useState('');
+  const [amount, setAmount] = useState(editAmount?.toString() || '');
+  const [details, setDetails] = useState(editDescription || '');
   const [date, setDate] = useState(moment(now).format('M/D/YYYY'));
   const [calculationString, setCalculationString] = useState('');
   const [isInputsUnlocked, setIsInputsUnlocked] = useState(false);
@@ -33,6 +33,37 @@ const CalculateScreen = ({ route, navigation }: any) => {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isUrdu, setIsUrdu] = useState(false);
+
+  // Date picker state
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedDay, setSelectedDay] = useState(now.getDate());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  // Time picker state
+  const [selectedHour, setSelectedHour] = useState(now.getHours() % 12 || 12);
+  const [selectedMinute, setSelectedMinute] = useState(now.getMinutes());
+  const [selectedSecond, setSelectedSecond] = useState(now.getSeconds());
+  const [selectedAmPm, setSelectedAmPm] = useState(now.getHours() >= 12 ? 'PM' : 'AM');
+
+  // Initialize picker values from current date/time
+  useEffect(() => {
+    const parsedDate = moment(date, 'M/D/YYYY', true);
+    if (parsedDate.isValid()) {
+      const d = parsedDate.toDate();
+      setSelectedMonth(d.getMonth() + 1);
+      setSelectedDay(d.getDate());
+      setSelectedYear(d.getFullYear());
+    }
+
+    const parsedTime = moment(time, 'h:mm:ss A', true);
+    if (parsedTime.isValid()) {
+      const t = parsedTime.toDate();
+      setSelectedHour(t.getHours() % 12 || 12);
+      setSelectedMinute(t.getMinutes());
+      setSelectedSecond(t.getSeconds());
+      setSelectedAmPm(t.getHours() >= 12 ? 'PM' : 'AM');
+    }
+  }, []);
 
   const handleCalculatorPress = (value: string) => {
     const updatedString = calculationString + value;
@@ -75,17 +106,34 @@ const CalculateScreen = ({ route, navigation }: any) => {
   };
 
   const handleSave = async () => {
-    if (amount && details && date && time) {
-      let type = transactionType === "Manay Diye" ? "debit" : "credit";
+    if (amount && details) {
       try {
         setLoading(true);
         const db = await getDBConnection();
-        const data = await addTransaction(db, parseInt(user_id), parseFloat(amount), details, date, time, type);
-        if (data) {
-          getTransactions();
-          navigation.goBack();
+        
+        if (isEditMode) {
+          // Update existing transaction
+          const updated = await updateTransaction(db, transactionId, parseInt(user_id), parseFloat(amount), details);
+          if (updated) {
+            getTransactions();
+            navigation.goBack();
+          } else {
+            Alert.alert("Error", "Error while updating transaction");
+          }
         } else {
-          Alert.alert("Error", "Error while adding transaction");
+          // Create new transaction
+          if (!date || !time) {
+            Alert.alert('Error', 'Please fill in all the details!');
+            return;
+          }
+          let type = transactionType === "Manay Diye" ? "debit" : "credit";
+          const data = await addTransaction(db, parseInt(user_id), parseFloat(amount), details, date, time, type);
+          if (data) {
+            getTransactions();
+            navigation.goBack();
+          } else {
+            Alert.alert("Error", "Error while adding transaction");
+          }
         }
       } catch (e) {
         Alert.alert("Error", JSON.stringify(e));
@@ -93,40 +141,34 @@ const CalculateScreen = ({ route, navigation }: any) => {
         setLoading(false);
       }
     } else {
-      Alert.alert('Error', 'Please fill in all the details!');
+      Alert.alert('Error', 'Please fill in amount and description!');
     }
   };
 
-  const handleDateChange = (event: any, selectedDate: Date | undefined) => {
-    if (Platform.OS === 'android') {
-      setShowDatePicker(false);
-      if (event.type === 'dismissed') {
-        return;
-      }
+  const handleDateConfirm = () => {
+    const selectedDate = moment(`${selectedMonth}/${selectedDay}/${selectedYear}`, 'M/D/YYYY');
+    if (!selectedDate.isValid()) {
+      Alert.alert('Error', 'Invalid date selected');
+      return;
     }
-    if (selectedDate) {
-      const formattedDate = moment(selectedDate).format('M/D/YYYY');
-      setDate(formattedDate);
-      if (Platform.OS === 'ios') {
-        setShowDatePicker(false);
-      }
+    if (selectedDate.isAfter(moment())) {
+      Alert.alert('Error', 'Cannot select future date');
+      return;
     }
+    setDate(selectedDate.format('M/D/YYYY'));
+    setShowDatePicker(false);
   };
 
-  const handleTimeChange = (event: any, selectedTime: Date | undefined) => {
-    if (Platform.OS === 'android') {
-      setShowTimePicker(false);
-      if (event.type === 'dismissed') {
-        return;
-      }
+  const handleTimeConfirm = () => {
+    let hour24 = selectedHour;
+    if (selectedAmPm === 'PM' && selectedHour !== 12) {
+      hour24 = selectedHour + 12;
+    } else if (selectedAmPm === 'AM' && selectedHour === 12) {
+      hour24 = 0;
     }
-    if (selectedTime) {
-      const formattedTime = moment(selectedTime).format('h:mm:ss A');
-      setTime(formattedTime);
-      if (Platform.OS === 'ios') {
-        setShowTimePicker(false);
-      }
-    }
+    const timeString = `${selectedHour}:${selectedMinute.toString().padStart(2, '0')}:${selectedSecond.toString().padStart(2, '0')} ${selectedAmPm}`;
+    setTime(timeString);
+    setShowTimePicker(false);
   };
 
   const handleTextChange = (text: string) => {
@@ -149,14 +191,54 @@ const CalculateScreen = ({ route, navigation }: any) => {
     }
   };
 
+  // Generate arrays for pickers
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+  const years = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
+  const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+  const minutes = Array.from({ length: 60 }, (_, i) => i);
+  const seconds = Array.from({ length: 60 }, (_, i) => i);
+
+  const renderPickerColumn = (
+    items: number[] | string[],
+    selectedValue: number | string,
+    onSelect: (value: any) => void,
+    formatValue?: (value: any) => string
+  ) => {
+    return (
+      <ScrollView
+        style={styles.pickerColumn}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={normalize(40)}
+        decelerationRate="fast"
+      >
+        {items.map((item, index) => {
+          const value = formatValue ? formatValue(item) : item.toString().padStart(2, '0');
+          const isSelected = item === selectedValue;
+          return (
+            <TouchableOpacity
+              key={index}
+              style={[styles.pickerItem, isSelected && styles.pickerItemSelected]}
+              onPress={() => onSelect(item)}
+            >
+              <Text style={[styles.pickerItemText, isSelected && styles.pickerItemTextSelected]}>
+                {value}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          {/* <Ionicons name="arrow-back" size={normalize(18)} color="#0A7075" /> */}
+          <Ionicons name="arrow-back" size={normalize(24)} color="#374151" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{transactionType}</Text>
+        <Text style={styles.headerTitle}>{isEditMode ? 'Update Transaction' : transactionType}</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -172,7 +254,7 @@ const CalculateScreen = ({ route, navigation }: any) => {
               value={amount}
               onChangeText={handleAmountChange}
               placeholder="0.00"
-              placeholderTextColor="#999"
+              placeholderTextColor="#9CA3AF"
               keyboardType="decimal-pad"
             />
           </View>
@@ -183,15 +265,17 @@ const CalculateScreen = ({ route, navigation }: any) => {
           <TouchableOpacity 
             style={styles.dateTimeButton}
             onPress={() => setShowDatePicker(true)}
+            activeOpacity={0.7}
           >
-            {/* <Ionicons name="calendar-outline" size={normalize(12)} color="#0A7075" /> */}
+            <Ionicons name="calendar-outline" size={normalize(18)} color="#0A7075" />
             <Text style={styles.dateTimeText}>{date}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.dateTimeButton}
             onPress={() => setShowTimePicker(true)}
+            activeOpacity={0.7}
           >
-            {/* <Ionicons name="time-outline" size={normalize(12)} color="#0A7075" /> */}
+            <Ionicons name="time-outline" size={normalize(18)} color="#0A7075" />
             <Text style={styles.dateTimeText}>{time}</Text>
           </TouchableOpacity>
         </View>
@@ -200,7 +284,7 @@ const CalculateScreen = ({ route, navigation }: any) => {
         <TextInput
           style={[styles.detailsInput, isUrdu && styles.urduInput]}
           placeholder="Tafseel / تفصیل"
-          placeholderTextColor="#999"
+          placeholderTextColor="#9CA3AF"
           value={details}
           onChangeText={handleTextChange}
           multiline
@@ -208,168 +292,86 @@ const CalculateScreen = ({ route, navigation }: any) => {
         />
 
         {/* Calculator */}
-        <View style={styles.calculatorSection}>
-          <View style={styles.calcRow}>
-            <TouchableOpacity style={[styles.calcButton, styles.clearButton]} onPress={handleClear}>
-              <Text style={styles.clearButtonText}>Clear</Text>
-            </TouchableOpacity>
-            {/* <TouchableOpacity style={[styles.calcButton, styles.operatorButton]} onPress={() => handleCalculatorPress('/')}>
-              <Text style={styles.calcButtonText}>/</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.calcButton, styles.operatorButton]} onPress={() => handleCalculatorPress('*')}>
-              <Text style={styles.calcButtonText}>×</Text>
-            </TouchableOpacity> */}
-            <TouchableOpacity style={[styles.calcButton, styles.deleteButton]} onPress={handleUndo}>
-              <MaterialIcons name="backspace" size={normalize(12)} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.calcRow}>
-            {['7', '8', '9'].map((btn) => (
-              <TouchableOpacity 
-                key={btn} 
-                style={[styles.calcButton, styles.numberButton]} 
-                onPress={() => handleCalculatorPress(btn)}
-              >
-                <Text style={styles.numberButtonText}>{btn}</Text>
-              </TouchableOpacity>
-            ))}
-            {/* <TouchableOpacity style={[styles.calcButton, styles.operatorButton]} onPress={() => handleCalculatorPress('-')}>
-              <Text style={styles.calcButtonText}>−</Text>
-            </TouchableOpacity> */}
-          </View>
-
-          <View style={styles.calcRow}>
-            {['4', '5', '6'].map((btn) => (
-              <TouchableOpacity 
-                key={btn} 
-                style={[styles.calcButton, styles.numberButton]} 
-                onPress={() => handleCalculatorPress(btn)}
-              >
-                <Text style={styles.numberButtonText}>{btn}</Text>
-              </TouchableOpacity>
-            ))}
-            {/* <TouchableOpacity style={[styles.calcButton, styles.operatorButton]} onPress={() => handleCalculatorPress('+')}>
-              <Text style={styles.calcButtonText}>+</Text>
-            </TouchableOpacity> */}
-          </View>
-
-          <View style={styles.calcRow}>
-            {['1', '2', '3'].map((btn) => (
-              <TouchableOpacity 
-                key={btn} 
-                style={[styles.calcButton, styles.numberButton]} 
-                onPress={() => handleCalculatorPress(btn)}
-              >
-                <Text style={styles.numberButtonText}>{btn}</Text>
-              </TouchableOpacity>
-            ))}
-            {/* <TouchableOpacity style={[styles.calcButton, styles.equalsButton]} onPress={handleEqual}>
-              <Text style={styles.calcButtonText}>=</Text>
-            </TouchableOpacity> */}
-          </View>
-
-          <View style={styles.calcRow}>
-            <TouchableOpacity 
-              style={[styles.calcButton, styles.numberButton, styles.zeroButton]} 
-              onPress={() => handleCalculatorPress('0')}
-            >
-              <Text style={styles.numberButtonText}>0</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.calcButton, styles.numberButton, styles.dotButton]} 
-              onPress={() => handleCalculatorPress('.')}
-            >
-              <Text style={styles.numberButtonText}>.</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.saveButtonDisabled]}
           onPress={handleSave}
           disabled={loading}
+          activeOpacity={0.8}
         >
           <Text style={styles.saveButtonText}>
-            {loading ? 'Saving...' : 'Save'}
+            {loading ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update' : 'Save')}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Date Picker - Android shows as system dialog, iOS in modal */}
-      {Platform.OS === 'ios' ? (
-        <Modal
-          visible={showDatePicker}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowDatePicker(false)}
+      {/* Custom Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDatePicker(false)}
         >
-          <View style={styles.modalOverlay}>
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Select Date</Text>
-                <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-                  {/* <Ionicons name="close" size={normalize(24)} color="#333" /> */}
+                <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.closeButton}>
+                  <Ionicons name="close" size={normalize(24)} color="#6B7280" />
                 </TouchableOpacity>
               </View>
-              <DateTimePicker
-                value={date ? moment(date, 'M/D/YYYY').toDate() : new Date()}
-                mode="date"
-                display="spinner"
-                onChange={handleDateChange}
-                maximumDate={new Date()}
-              />
+              <View style={styles.pickerContainer}>
+                {renderPickerColumn(months, selectedMonth, setSelectedMonth)}
+                {renderPickerColumn(days, selectedDay, setSelectedDay)}
+                {renderPickerColumn(years, selectedYear, setSelectedYear, (y) => y.toString())}
+              </View>
+              <TouchableOpacity style={styles.confirmButton} onPress={handleDateConfirm}>
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
-      ) : (
-        showDatePicker && (
-          <DateTimePicker
-            value={date ? moment(date, 'M/D/YYYY').toDate() : new Date()}
-            mode="date"
-            display="default"
-            onChange={handleDateChange}
-            maximumDate={new Date()}
-          />
-        )
-      )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
-      {/* Time Picker - Android shows as system dialog, iOS in modal */}
-      {Platform.OS === 'ios' ? (
-        <Modal
-          visible={showTimePicker}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowTimePicker(false)}
+      {/* Custom Time Picker Modal */}
+      <Modal
+        visible={showTimePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowTimePicker(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowTimePicker(false)}
         >
-          <View style={styles.modalOverlay}>
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Select Time</Text>
-                <TouchableOpacity onPress={() => setShowTimePicker(false)}>
-                  <Ionicons name="close" size={normalize(24)} color="#333" />
+                <TouchableOpacity onPress={() => setShowTimePicker(false)} style={styles.closeButton}>
+                  <Ionicons name="close" size={normalize(24)} color="#6B7280" />
                 </TouchableOpacity>
               </View>
-              <DateTimePicker
-                value={time ? moment(time, 'h:mm:ss A').toDate() : new Date()}
-                mode="time"
-                display="spinner"
-                onChange={handleTimeChange}
-              />
+              <View style={styles.pickerContainer}>
+                {renderPickerColumn(hours, selectedHour, setSelectedHour)}
+                {renderPickerColumn(minutes, selectedMinute, setSelectedMinute)}
+                {renderPickerColumn(seconds, selectedSecond, setSelectedSecond)}
+                {renderPickerColumn(['AM', 'PM'], selectedAmPm, setSelectedAmPm)}
+              </View>
+              <TouchableOpacity style={styles.confirmButton} onPress={handleTimeConfirm}>
+                <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        </Modal>
-      ) : (
-        showTimePicker && (
-          <DateTimePicker
-            value={time ? moment(time, 'h:mm:ss A').toDate() : new Date()}
-            mode="time"
-            display="default"
-            onChange={handleTimeChange}
-          />
-        )
-      )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -377,68 +379,97 @@ const CalculateScreen = ({ route, navigation }: any) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FAFBFC',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: normalize(10),
-    paddingTop: Platform.OS === 'ios' ? normalize(45) : normalize(15),
-    paddingBottom: normalize(6),
+    paddingHorizontal: normalize(20),
+    paddingTop: Platform.OS === 'ios' ? normalize(50) : normalize(20),
+    paddingBottom: normalize(16),
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#E1E4E8',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+    }),
   },
   backButton: {
-    padding: normalize(2),
+    padding: normalize(4),
+    borderRadius: normalize(20),
   },
   headerTitle: {
-    fontSize: normalize(14),
-    fontWeight: '700',
-    color: '#0A7075',
+    fontSize: normalize(17),
+    fontWeight: '600',
+    color: '#1A1F2E',
     flex: 1,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   placeholder: {
-    width: normalize(24),
+    width: normalize(30),
   },
   content: {
     flex: 1,
-    padding: normalize(6),
+    padding: normalize(16),
     justifyContent: 'space-between',
   },
   amountSection: {
     backgroundColor: '#FFFFFF',
-    borderRadius: normalize(4),
-    padding: normalize(6),
-    marginBottom: normalize(4),
+    borderRadius: normalize(16),
+    padding: normalize(20),
+    marginBottom: normalize(16),
+    borderWidth: 0.5,
+    borderColor: '#E8EBED',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
   },
   calculationDisplay: {
-    fontSize: normalize(10),
-    color: '#999',
-    marginBottom: normalize(2),
+    fontSize: normalize(13),
+    color: '#6B7280',
+    marginBottom: normalize(8),
     textAlign: 'right',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    opacity: 0.7,
   },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
+    borderBottomWidth: 2,
     borderBottomColor: '#0A7075',
-    paddingBottom: normalize(2),
+    paddingBottom: normalize(8),
   },
   amountInput: {
     flex: 1,
-    fontSize: normalize(20),
+    fontSize: normalize(32),
     fontWeight: '700',
-    color: '#031716',
+    color: '#111827',
     textAlign: 'right',
     padding: 0,
+    letterSpacing: 0.3,
   },
   dateTimeRow: {
     flexDirection: 'row',
-    gap: normalize(4),
-    marginBottom: normalize(4),
+    gap: normalize(14),
+    marginBottom: normalize(16),
   },
   dateTimeButton: {
     flex: 1,
@@ -446,29 +477,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
-    paddingVertical: normalize(5),
-    paddingHorizontal: normalize(6),
-    borderRadius: normalize(4),
-    gap: normalize(3),
+    paddingVertical: normalize(14),
+    paddingHorizontal: normalize(14),
+    borderRadius: normalize(12),
+    gap: normalize(10),
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#E1E4E8',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   dateTimeText: {
-    fontSize: normalize(10),
-    color: '#333',
+    fontSize: normalize(14),
+    color: '#374151',
     fontWeight: '500',
+    letterSpacing: 0.2,
   },
   detailsInput: {
     backgroundColor: '#FFFFFF',
-    borderRadius: normalize(4),
-    padding: normalize(6),
-    fontSize: normalize(11),
-    color: '#031716',
-    minHeight: normalize(32),
+    borderRadius: normalize(12),
+    padding: normalize(16),
+    fontSize: normalize(14),
+    color: '#111827',
+    minHeight: normalize(90),
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
-    marginBottom: normalize(4),
+    borderColor: '#E1E4E8',
+    marginBottom: normalize(16),
+    lineHeight: normalize(20),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   urduInput: {
     textAlign: 'right',
@@ -533,19 +588,40 @@ const styles = StyleSheet.create({
   },
   saveButton: {
     backgroundColor: '#0A7075',
-    paddingVertical: normalize(8),
-    borderRadius: normalize(4),
+    paddingVertical: normalize(16),
+    borderRadius: normalize(14),
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0A7075',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
   saveButtonDisabled: {
-    backgroundColor: '#999',
-    opacity: 0.7,
+    backgroundColor: '#9CA3AF',
+    opacity: 0.5,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 1,
+      },
+    }),
   },
   saveButtonText: {
-    fontSize: normalize(12),
-    fontWeight: '700',
+    fontSize: normalize(16),
+    fontWeight: '600',
     color: '#FFFFFF',
+    letterSpacing: 0.8,
   },
   modalOverlay: {
     flex: 1,
@@ -554,24 +630,93 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: normalize(16),
-    borderTopRightRadius: normalize(16),
-    padding: normalize(16),
-    paddingBottom: normalize(32),
+    borderTopLeftRadius: normalize(24),
+    borderTopRightRadius: normalize(24),
+    padding: normalize(24),
+    paddingBottom: normalize(48),
+    maxHeight: '85%',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 8,
+      },
+    }),
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: normalize(16),
-    paddingBottom: normalize(12),
+    marginBottom: normalize(24),
+    paddingBottom: normalize(18),
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#E1E4E8',
   },
   modalTitle: {
+    fontSize: normalize(22),
+    fontWeight: '600',
+    color: '#111827',
+    letterSpacing: 0.3,
+  },
+  closeButton: {
+    padding: normalize(4),
+    borderRadius: normalize(20),
+  },
+  pickerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    height: normalize(200),
+    marginVertical: normalize(20),
+  },
+  pickerColumn: {
+    flex: 1,
+  },
+  pickerItem: {
+    height: normalize(40),
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: normalize(8),
+  },
+  pickerItemSelected: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: normalize(8),
+  },
+  pickerItemText: {
+    fontSize: normalize(16),
+    color: '#6B7280',
+  },
+  pickerItemTextSelected: {
     fontSize: normalize(18),
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: '600',
+    color: '#0A7075',
+  },
+  confirmButton: {
+    backgroundColor: '#0A7075',
+    paddingVertical: normalize(14),
+    borderRadius: normalize(12),
+    alignItems: 'center',
+    marginTop: normalize(20),
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0A7075',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  confirmButtonText: {
+    fontSize: normalize(16),
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
 });
 
