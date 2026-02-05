@@ -722,7 +722,7 @@ const pickerStyles = StyleSheet.create({
     borderTopLeftRadius: normalize(24),
     borderTopRightRadius: normalize(24),
     padding: normalize(24),
-    paddingBottom: normalize(48),
+    paddingBottom: Platform.OS === 'android' ? normalize(24) : normalize(48),
     maxHeight: '85%',
     ...Platform.select({
       ios: {

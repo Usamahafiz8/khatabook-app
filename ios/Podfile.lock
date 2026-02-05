@@ -1283,7 +1283,7 @@ PODS:
     - Yoga
   - react-native-safe-area-context (4.14.1):
     - React-Core
-  - react-native-sqlite-storage (7.0.0):
+  - react-native-sqlite-storage (6.0.1):
     - React-Core
   - React-nativeconfig (0.75.4)
   - React-NativeModulesApple (0.75.4):
@@ -1551,7 +1551,7 @@ PODS:
     - React-Core
   - RNFS (2.20.0):
     - React-Core
-  - RNGestureHandler (2.30.0):
+  - RNGestureHandler (2.20.2):
     - DoubleConversion
     - glog
     - hermes-engine
@@ -1912,7 +1912,7 @@ SPEC CHECKSUMS:
   react-native-html-to-pdf: 7a49e6c58ac5221bcc093027b195f4b214f27a9d
   react-native-pager-view: 40fb187840331afe14b9d39116a8e4c203c8ee37
   react-native-safe-area-context: 758e894ca5a9bd1868d2a9cfbca7326a2b6bf9dc
-  react-native-sqlite-storage: b0d54a628073ea8f22e31aa1970674b7e37b8558
+  react-native-sqlite-storage: 0c84826214baaa498796c7e46a5ccc9a82e114ed
   React-nativeconfig: 8c83d992b9cc7d75b5abe262069eaeea4349f794
   React-NativeModulesApple: 97f606f09fd9840b3868333984d6a0e7bcc425b5
   React-perflogger: 59e1a3182dca2cee7b9f1f7aab204018d46d1914
@@ -1942,7 +1942,7 @@ SPEC CHECKSUMS:
   RNCAsyncStorage: b44e8a4e798c3e1f56bffccd0f591f674fb9198f
   RNDateTimePicker: 39a7b97196b9daaa1d52d71fb835da924a9c5776
   RNFS: 89de7d7f4c0f6bafa05343c578f61118c8282ed8
-  RNGestureHandler: e8ed5db31abcc85175f4b7860a3e700dfc0ad9b6
+  RNGestureHandler: 27a63f2218affdf1a426d56682f9b174904838b3
   RNScreens: 631b8768411a16e356f7934058d2139d0cc75157
   RNShare: 57cb4729609a4ba7bad0d70be589f074089a5291
   RNVectorIcons: 18f6874f831ee0c755e31bb16b0f746c093fc0d8

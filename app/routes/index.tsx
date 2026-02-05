@@ -13,7 +13,7 @@ const Routes = () => {
         <Stack.Screen name="Register" component={Register}   options={{ headerShown: false }}  />
         <Stack.Screen name="Home" component={Home}  options={{ headerShown: false }} />
         <Stack.Screen name="Hisaab" component={CustomerHisaab} options={{ headerShown: false }} />
-        <Stack.Screen name="Calculate" component={Calculate} />
+        <Stack.Screen name="Calculate" component={Calculate} options={{ headerShown: false }} />
         <Stack.Screen name="SupplierHisaab" component={SupplierHisaab} options={{ headerShown: false }} />
         <Stack.Screen name="ReportScreen" component={ReportSupplier} options={{ headerShown: false }} />
         <Stack.Screen name="ReportScreenCustomer" component={ReportCustomer} options={{ headerShown: false }} />

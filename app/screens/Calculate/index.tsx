@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Dimensions,
   Modal,
   ScrollView,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { addTransaction, getDBConnection, updateTransaction } from '../../services';
@@ -19,20 +21,68 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const scale = SCREEN_WIDTH / 320;
 const normalize = (size: number) => Math.round(scale * size);
 
-const CalculateScreen = ({ route, navigation }: any) => {
-  const { transactionType, customerName, getTransactions, user_id, transactionId, editAmount, editDescription }: any = route.params;
+// Calculator button configuration
+const CALCULATOR_LAYOUT = [
+  [
+    { label: 'C', value: 'clear', type: 'clear' },
+    { label: '', value: 'undo', type: 'delete', icon: 'backspace-outline' },
+    { label: '÷', value: '/', type: 'operator' },
+  ],
+  [
+    { label: '7', value: '7', type: 'number' },
+    { label: '8', value: '8', type: 'number' },
+    { label: '9', value: '9', type: 'number' },
+    { label: '×', value: '*', type: 'operator' },
+  ],
+  [
+    { label: '4', value: '4', type: 'number' },
+    { label: '5', value: '5', type: 'number' },
+    { label: '6', value: '6', type: 'number' },
+    { label: '−', value: '-', type: 'operator' },
+  ],
+  [
+    { label: '1', value: '1', type: 'number' },
+    { label: '2', value: '2', type: 'number' },
+    { label: '3', value: '3', type: 'number' },
+    { label: '+', value: '+', type: 'operator' },
+  ],
+  [
+    { label: '0', value: '0', type: 'number', flex: 2 },
+    { label: '.', value: '.', type: 'number', flex: 1 },
+    { label: '=', value: 'equals', type: 'equals', flex: 1 },
+  ],
+];
+
+interface CalculateScreenProps {
+  route: any;
+  navigation: any;
+}
+
+const CalculateScreen: React.FC<CalculateScreenProps> = ({ route, navigation }) => {
+  const { transactionType, customerName, getTransactions, user_id, transactionId, editAmount, editDescription } = route.params || {};
   const isEditMode = !!transactionId;
   const now = new Date();
+  
+  // Form state
   const [time, setTime] = useState(moment(now).format('h:mm:ss A'));
   const [amount, setAmount] = useState(editAmount?.toString() || '');
   const [details, setDetails] = useState(editDescription || '');
   const [date, setDate] = useState(moment(now).format('M/D/YYYY'));
+  
+  // Calculator state
   const [calculationString, setCalculationString] = useState('');
-  const [isInputsUnlocked, setIsInputsUnlocked] = useState(false);
+  const [calculationHistory, setCalculationHistory] = useState<string[]>([]);
+  const [showCalculator, setShowCalculator] = useState(false);
+  
+  // UI state
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isUrdu, setIsUrdu] = useState(false);
+  
+  // Refs
+  const scrollViewRef = useRef<ScrollView>(null);
+  const detailsInputRef = useRef<TextInput>(null);
 
   // Date picker state
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -65,86 +115,96 @@ const CalculateScreen = ({ route, navigation }: any) => {
     }
   }, []);
 
+  // Calculator handlers
   const handleCalculatorPress = (value: string) => {
-    const updatedString = calculationString + value;
-    try {
-      const result = eval(updatedString).toString();
-      setAmount(result);
-    } catch {
+    if (value === 'clear') {
+      setCalculationString('');
       setAmount('');
+      return;
     }
-    setCalculationString(updatedString);
-    if (!isInputsUnlocked) setIsInputsUnlocked(true);
-  };
-
-  const handleUndo = () => {
-    const updatedString = calculationString.slice(0, -1);
-    try {
-      const result = updatedString ? eval(updatedString).toString() : '';
-      setAmount(result);
-    } catch {
-      setAmount('');
-    }
-    setCalculationString(updatedString);
-    if (updatedString.length === 0) setIsInputsUnlocked(false);
-  };
-
-  const handleClear = () => {
-    setCalculationString('');
-    setAmount('');
-    setIsInputsUnlocked(false);
-  };
-
-  const handleEqual = () => {
-    try {
-      const result = eval(calculationString);
-      setCalculationString(result.toString());
-      setAmount(result.toString());
-    } catch (error) {
-      Alert.alert('Error', 'Invalid calculation');
-    }
-  };
-
-  const handleSave = async () => {
-    if (amount && details) {
+    if (value === 'undo') {
+      const updatedString = calculationString.slice(0, -1);
       try {
-        setLoading(true);
-        const db = await getDBConnection();
-        
-        if (isEditMode) {
-          // Update existing transaction
-          const updated = await updateTransaction(db, transactionId, parseInt(user_id), parseFloat(amount), details);
-          if (updated) {
-            getTransactions();
-            navigation.goBack();
-          } else {
-            Alert.alert("Error", "Error while updating transaction");
-          }
-        } else {
-          // Create new transaction
-          if (!date || !time) {
-            Alert.alert('Error', 'Please fill in all the details!');
-            return;
-          }
-          let type = transactionType === "Manay Diye" ? "debit" : "credit";
-          const data = await addTransaction(db, parseInt(user_id), parseFloat(amount), details, date, time, type);
-          if (data) {
-            getTransactions();
-            navigation.goBack();
-          } else {
-            Alert.alert("Error", "Error while adding transaction");
-          }
-        }
-      } catch (e) {
-        Alert.alert("Error", JSON.stringify(e));
-      } finally {
-        setLoading(false);
+        const result = updatedString ? eval(updatedString).toString() : '';
+        setAmount(result);
+      } catch {
+        setAmount('');
       }
-    } else {
-      Alert.alert('Error', 'Please fill in amount and description!');
+      setCalculationString(updatedString);
+      return;
+    }
+    if (value === 'equals') {
+      if (!calculationString) return;
+      try {
+        const result = eval(calculationString);
+        const resultStr = result.toString();
+        const calculationRecord = `${calculationString} = ${resultStr}`;
+        setCalculationHistory(prev => [calculationRecord, ...prev.slice(0, 4)]);
+        setCalculationString(resultStr);
+        setAmount(resultStr);
+      } catch (error) {
+        Alert.alert('Error', 'Invalid calculation');
+      }
+      return;
+    }
+
+    let updatedString = calculationString + value;
+    if (updatedString.match(/[+\-*/]{2,}/)) return;
+    
+    try {
+      if (value.match(/[+\-*/]/)) {
+        setCalculationString(updatedString);
+      } else {
+        const result = eval(updatedString).toString();
+        setAmount(result);
+        setCalculationString(updatedString);
+      }
+    } catch {
+      setCalculationString(updatedString);
     }
   };
 
+  // Save handler
+  const handleSave = async () => {
+    if (!amount || !details) {
+      Alert.alert('Error', 'Please fill in amount and description!');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const db = await getDBConnection();
+      
+      if (isEditMode) {
+        const updated = await updateTransaction(db, transactionId, parseInt(user_id), parseFloat(amount), details);
+        if (updated) {
+          getTransactions?.();
+          navigation.goBack();
+        } else {
+          Alert.alert("Error", "Error while updating transaction");
+        }
+      } else {
+        if (!date || !time) {
+          Alert.alert('Error', 'Please fill in all the details!');
+          return;
+        }
+        const type = transactionType === "Manay Diye" ? "debit" : "credit";
+        const data = await addTransaction(db, parseInt(user_id), parseFloat(amount), details, date, time, type);
+        if (data) {
+          getTransactions?.();
+          navigation.goBack();
+        } else {
+          Alert.alert("Error", "Error while adding transaction");
+        }
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || JSON.stringify(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Date/Time handlers
   const handleDateConfirm = () => {
     const selectedDate = moment(`${selectedMonth}/${selectedDay}/${selectedYear}`, 'M/D/YYYY');
     if (!selectedDate.isValid()) {
@@ -185,9 +245,6 @@ const CalculateScreen = ({ route, navigation }: any) => {
     setAmount(formattedValue);
     if (formattedValue) {
       setCalculationString('');
-      setIsInputsUnlocked(true);
-    } else {
-      setIsInputsUnlocked(false);
     }
   };
 
@@ -199,6 +256,7 @@ const CalculateScreen = ({ route, navigation }: any) => {
   const minutes = Array.from({ length: 60 }, (_, i) => i);
   const seconds = Array.from({ length: 60 }, (_, i) => i);
 
+  // Render picker column
   const renderPickerColumn = (
     items: number[] | string[],
     selectedValue: number | string,
@@ -231,6 +289,92 @@ const CalculateScreen = ({ route, navigation }: any) => {
     );
   };
 
+  // Render calculator button
+  const renderCalcButton = (button: any) => {
+    const getButtonStyle = () => {
+      switch (button.type) {
+        case 'clear':
+          return [styles.calcButton, styles.clearButton];
+        case 'delete':
+          return [styles.calcButton, styles.deleteButton];
+        case 'operator':
+          return [styles.calcButton, styles.operatorButton];
+        case 'equals':
+          return [styles.calcButton, styles.equalsButton];
+        default:
+          return [styles.calcButton, styles.numberButton];
+      }
+    };
+
+    const getTextStyle = () => {
+      switch (button.type) {
+        case 'clear':
+          return styles.clearButtonText;
+        case 'operator':
+        case 'equals':
+          return styles.calcButtonText;
+        default:
+          return styles.numberButtonText;
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        key={`${button.value}-${button.type}`}
+        style={[getButtonStyle(), button.flex === 2 && styles.zeroButton]}
+        onPress={() => handleCalculatorPress(button.value)}
+        activeOpacity={0.7}
+      >
+        {button.icon ? (
+          <Ionicons name={button.icon} size={normalize(18)} color="#FFFFFF" />
+        ) : (
+          <Text style={getTextStyle()}>{button.label}</Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  // Header configuration
+  const headerTitle = isEditMode ? 'Update Record' : 'Add Record';
+  const headerSubtitle = !isEditMode && customerName ? customerName : null;
+
+  // Render date/time picker modal
+  const renderPickerModal = (
+    visible: boolean,
+    title: string,
+    onClose: () => void,
+    onConfirm: () => void,
+    pickerContent: React.ReactNode
+  ) => (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{title}</Text>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <Ionicons name="close" size={normalize(24)} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            {pickerContent}
+            <TouchableOpacity style={styles.confirmButton} onPress={onConfirm}>
+              <Text style={styles.confirmButtonText}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -238,140 +382,192 @@ const CalculateScreen = ({ route, navigation }: any) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={normalize(24)} color="#374151" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isEditMode ? 'Update Transaction' : transactionType}</Text>
+        <View style={styles.headerTitleContainer}>
+          {headerSubtitle && (
+            <Text style={styles.headerSubtitle} numberOfLines={1} ellipsizeMode="tail">
+              {headerSubtitle}
+            </Text>
+          )}
+          <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+            {headerTitle}
+          </Text>
+        </View>
         <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.content}>
-        {/* Amount Input */}
-        <View style={styles.amountSection}>
-          {calculationString ? (
-            <Text style={styles.calculationDisplay}>{calculationString}</Text>
-          ) : null}
-          <View style={styles.amountRow}>
-            <TextInput
-              style={styles.amountInput}
-              value={amount}
-              onChangeText={handleAmountChange}
-              placeholder="0.00"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="decimal-pad"
-            />
+      <KeyboardAvoidingView 
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          scrollEventThrottle={16}
+          scrollEnabled={!showCalculator}
+        >
+          {/* Amount Section */}
+          <View style={styles.amountSection}>
+            {calculationHistory.length > 0 && (
+              <View style={styles.historyContainer}>
+                {calculationHistory.slice(0, 2).map((hist, idx) => (
+                  <Text key={idx} style={styles.historyText}>{hist}</Text>
+                ))}
+              </View>
+            )}
+            
+            {calculationString && (
+              <Text style={styles.calculationDisplay}>{calculationString}</Text>
+            )}
+            
+            <View style={styles.amountInputContainer}>
+              <View style={styles.amountRow}>
+                <Text style={styles.currencySymbol}>Rs.</Text>
+                <TextInput
+                  style={styles.amountInput}
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                  placeholder="0.00"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                  showSoftInputOnFocus={false}
+                  onFocus={(e: any) => {
+                    e.target.blur();
+                    setShowCalculator(true);
+                  }}
+                  editable={true}
+                />
+              </View>
+              <TouchableOpacity 
+                style={styles.calcToggleButton}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowCalculator(!showCalculator);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name={showCalculator ? "calculator" : "calculator-outline"} 
+                  size={normalize(24)} 
+                  color="#0A7075" 
+                />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
-        {/* Date & Time */}
-        <View style={styles.dateTimeRow}>
-          <TouchableOpacity 
-            style={styles.dateTimeButton}
-            onPress={() => setShowDatePicker(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="calendar-outline" size={normalize(18)} color="#0A7075" />
-            <Text style={styles.dateTimeText}>{date}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.dateTimeButton}
-            onPress={() => setShowTimePicker(true)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="time-outline" size={normalize(18)} color="#0A7075" />
-            <Text style={styles.dateTimeText}>{time}</Text>
-          </TouchableOpacity>
-        </View>
+          {/* Date & Time */}
+          {!showCalculator && <View style={styles.dateTimeRow}>
+            <TouchableOpacity 
+              style={styles.dateTimeButton}
+              onPress={() => setShowDatePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="calendar-outline" size={normalize(20)} color="#0A7075" />
+              <View style={styles.dateTimeContent}>
+                <Text style={styles.dateTimeLabel}>Date</Text>
+                <Text style={styles.dateTimeText}>{date}</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.dateTimeButton}
+              onPress={() => setShowTimePicker(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="time-outline" size={normalize(20)} color="#0A7075" />
+              <View style={styles.dateTimeContent}>
+                <Text style={styles.dateTimeLabel}>Time</Text>
+                <Text style={styles.dateTimeText}>{time}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>}
 
-        {/* Details Input */}
-        <TextInput
-          style={[styles.detailsInput, isUrdu && styles.urduInput]}
-          placeholder="Tafseel / تفصیل"
-          placeholderTextColor="#9CA3AF"
-          value={details}
-          onChangeText={handleTextChange}
-          multiline
-          numberOfLines={2}
-        />
+          {/* Details Input */}
+          {!showCalculator && <View style={styles.detailsSection}>
+            <Text style={styles.detailsLabel}>Details / تفصیل</Text>
+            <TextInput
+              ref={detailsInputRef}
+              style={[styles.detailsInput, isUrdu && styles.urduInput]}
+              placeholder="Enter transaction details..."
+              placeholderTextColor="#9CA3AF"
+              value={details}
+              onChangeText={handleTextChange}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              onFocus={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 300);
+              }}
+              blurOnSubmit={false}
+            />
+          </View>}
 
-        {/* Calculator */}
+          {/* Calculator Section */}
+          {showCalculator && (
+            <View 
+              style={styles.calculatorSection}
+              onLayout={() => {
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollToEnd({ animated: true });
+                }, 100);
+              }}
+            >
+              <View style={styles.calcContainer}>
+                {CALCULATOR_LAYOUT.map((row, rowIndex) => (
+                  <View key={rowIndex} style={styles.calcRow}>
+                    {row.map((button) => renderCalcButton(button))}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+        </ScrollView>
 
         {/* Save Button */}
-        <TouchableOpacity
-          style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-          onPress={handleSave}
-          disabled={loading}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.saveButtonText}>
-            {loading ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update' : 'Save')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Custom Date Picker Modal */}
-      <Modal
-        visible={showDatePicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowDatePicker(false)}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Date</Text>
-                <TouchableOpacity onPress={() => setShowDatePicker(false)} style={styles.closeButton}>
-                  <Ionicons name="close" size={normalize(24)} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.pickerContainer}>
-                {renderPickerColumn(months, selectedMonth, setSelectedMonth)}
-                {renderPickerColumn(days, selectedDay, setSelectedDay)}
-                {renderPickerColumn(years, selectedYear, setSelectedYear, (y) => y.toString())}
-              </View>
-              <TouchableOpacity style={styles.confirmButton} onPress={handleDateConfirm}>
-                <Text style={styles.confirmButtonText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.saveButtonContainer}>
+          <TouchableOpacity
+            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.saveButtonText}>
+              {loading ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update' : 'Save')}
+            </Text>
           </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        </View>
+      </KeyboardAvoidingView>
 
-      {/* Custom Time Picker Modal */}
-      <Modal
-        visible={showTimePicker}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowTimePicker(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowTimePicker(false)}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Select Time</Text>
-                <TouchableOpacity onPress={() => setShowTimePicker(false)} style={styles.closeButton}>
-                  <Ionicons name="close" size={normalize(24)} color="#6B7280" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.pickerContainer}>
-                {renderPickerColumn(hours, selectedHour, setSelectedHour)}
-                {renderPickerColumn(minutes, selectedMinute, setSelectedMinute)}
-                {renderPickerColumn(seconds, selectedSecond, setSelectedSecond)}
-                {renderPickerColumn(['AM', 'PM'], selectedAmPm, setSelectedAmPm)}
-              </View>
-              <TouchableOpacity style={styles.confirmButton} onPress={handleTimeConfirm}>
-                <Text style={styles.confirmButtonText}>Confirm</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      {/* Date Picker Modal */}
+      {renderPickerModal(
+        showDatePicker,
+        'Select Date',
+        () => setShowDatePicker(false),
+        handleDateConfirm,
+        <View style={styles.pickerContainer}>
+          {renderPickerColumn(months, selectedMonth, setSelectedMonth)}
+          {renderPickerColumn(days, selectedDay, setSelectedDay)}
+          {renderPickerColumn(years, selectedYear, setSelectedYear, (y) => y.toString())}
+        </View>
+      )}
+
+      {/* Time Picker Modal */}
+      {renderPickerModal(
+        showTimePicker,
+        'Select Time',
+        () => setShowTimePicker(false),
+        handleTimeConfirm,
+        <View style={styles.pickerContainer}>
+          {renderPickerColumn(hours, selectedHour, setSelectedHour)}
+          {renderPickerColumn(minutes, selectedMinute, setSelectedMinute)}
+          {renderPickerColumn(seconds, selectedSecond, setSelectedSecond)}
+          {renderPickerColumn(['AM', 'PM'], selectedAmPm, setSelectedAmPm)}
+        </View>
+      )}
     </View>
   );
 };
@@ -407,55 +603,97 @@ const styles = StyleSheet.create({
     padding: normalize(4),
     borderRadius: normalize(20),
   },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerSubtitle: {
+    fontSize: normalize(13),
+    fontWeight: '500',
+    color: '#6B7280',
+    marginBottom: normalize(2),
+    letterSpacing: 0.2,
+  },
   headerTitle: {
     fontSize: normalize(17),
     fontWeight: '600',
     color: '#1A1F2E',
-    flex: 1,
-    textAlign: 'center',
     letterSpacing: 0.3,
   },
   placeholder: {
     width: normalize(30),
   },
-  content: {
+  keyboardView: {
     flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     padding: normalize(16),
-    justifyContent: 'space-between',
+    paddingBottom: normalize(100),
   },
   amountSection: {
     backgroundColor: '#FFFFFF',
     borderRadius: normalize(16),
     padding: normalize(20),
     marginBottom: normalize(16),
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: '#E8EBED',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 4,
+        elevation: 3,
       },
     }),
   },
+  historyContainer: {
+    marginBottom: normalize(8),
+    paddingBottom: normalize(8),
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  historyText: {
+    fontSize: normalize(11),
+    color: '#9CA3AF',
+    textAlign: 'right',
+    marginBottom: normalize(4),
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
   calculationDisplay: {
-    fontSize: normalize(13),
+    fontSize: normalize(14),
     color: '#6B7280',
     marginBottom: normalize(8),
     textAlign: 'right',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    opacity: 0.7,
+    fontWeight: '500',
+    minHeight: normalize(20),
+  },
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: normalize(12),
   },
   amountRow: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 2,
     borderBottomColor: '#0A7075',
     paddingBottom: normalize(8),
+  },
+  currencySymbol: {
+    fontSize: normalize(24),
+    fontWeight: '600',
+    color: '#0A7075',
+    marginRight: normalize(8),
   },
   amountInput: {
     flex: 1,
@@ -466,40 +704,63 @@ const styles = StyleSheet.create({
     padding: 0,
     letterSpacing: 0.3,
   },
+  calcToggleButton: {
+    padding: normalize(8),
+    borderRadius: normalize(8),
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   dateTimeRow: {
     flexDirection: 'row',
-    gap: normalize(14),
+    gap: normalize(12),
     marginBottom: normalize(16),
   },
   dateTimeButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: '#FFFFFF',
     paddingVertical: normalize(14),
     paddingHorizontal: normalize(14),
     borderRadius: normalize(12),
-    gap: normalize(10),
+    gap: normalize(12),
     borderWidth: 1,
     borderColor: '#E1E4E8',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
       },
       android: {
         elevation: 2,
       },
     }),
   },
+  dateTimeContent: {
+    flex: 1,
+  },
+  dateTimeLabel: {
+    fontSize: normalize(11),
+    color: '#6B7280',
+    marginBottom: normalize(2),
+    fontWeight: '500',
+  },
   dateTimeText: {
     fontSize: normalize(14),
+    color: '#111827',
+    fontWeight: '600',
+  },
+  detailsSection: {
+    marginBottom: normalize(16),
+  },
+  detailsLabel: {
+    fontSize: normalize(13),
     color: '#374151',
-    fontWeight: '500',
-    letterSpacing: 0.2,
+    fontWeight: '600',
+    marginBottom: normalize(8),
   },
   detailsInput: {
     backgroundColor: '#FFFFFF',
@@ -507,18 +768,17 @@ const styles = StyleSheet.create({
     padding: normalize(16),
     fontSize: normalize(14),
     color: '#111827',
-    minHeight: normalize(90),
+    minHeight: normalize(100),
     textAlignVertical: 'top',
     borderWidth: 1,
     borderColor: '#E1E4E8',
-    marginBottom: normalize(16),
     lineHeight: normalize(20),
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
       },
       android: {
         elevation: 2,
@@ -529,24 +789,48 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   calculatorSection: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: normalize(4),
-    padding: normalize(4),
-    marginBottom: normalize(4),
-    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: normalize(16),
+    padding: normalize(16),
+    marginBottom: normalize(16),
+    borderWidth: 1,
+    borderColor: '#E1E4E8',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 4,
+      },
+    }),
+  },
+  calcContainer: {
+    gap: normalize(6),
   },
   calcRow: {
     flexDirection: 'row',
-    marginBottom: normalize(3),
-    gap: normalize(3),
+    gap: normalize(6),
   },
   calcButton: {
     flex: 1,
-    height: normalize(36),
-    borderRadius: normalize(4),
+    height: normalize(42),
+    borderRadius: normalize(8),
     alignItems: 'center',
     justifyContent: 'center',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.08,
+        shadowRadius: 2,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
   },
   clearButton: {
     backgroundColor: '#B52126',
@@ -568,36 +852,40 @@ const styles = StyleSheet.create({
   zeroButton: {
     flex: 2,
   },
-  dotButton: {
-    flex: 1,
-  },
   clearButtonText: {
-    fontSize: normalize(10),
+    fontSize: normalize(16),
     fontWeight: '700',
     color: '#FFFFFF',
   },
   calcButtonText: {
-    fontSize: normalize(12),
+    fontSize: normalize(20),
     fontWeight: '600',
     color: '#FFFFFF',
   },
   numberButtonText: {
-    fontSize: normalize(12),
-    fontWeight: '500',
-    color: '#333',
+    fontSize: normalize(18),
+    fontWeight: '600',
+    color: '#111827',
+  },
+  saveButtonContainer: {
+    padding: normalize(16),
+    paddingBottom: Platform.OS === 'android' ? normalize(12) : normalize(20),
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E1E4E8',
   },
   saveButton: {
     backgroundColor: '#0A7075',
     paddingVertical: normalize(16),
-    borderRadius: normalize(14),
+    borderRadius: normalize(12),
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
       ios: {
         shadowColor: '#0A7075',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.25,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
       },
       android: {
         elevation: 6,
@@ -633,7 +921,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: normalize(24),
     borderTopRightRadius: normalize(24),
     padding: normalize(24),
-    paddingBottom: normalize(48),
+    paddingBottom: Platform.OS === 'android' ? normalize(24) : normalize(48),
     maxHeight: '85%',
     ...Platform.select({
       ios: {

@@ -21,6 +21,7 @@ import MaterialIcon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { addPerson, createCustomerTable, createTransactionTable, getCustomerCreditsAndDebits, getDBConnection, getPeopleList, getSupplierCreditsAndDebits, getKhataBalanceSheet, deletePerson, getTransactionsAndBalance, getUserById } from '../../services';
 import { KhataPdf } from '../../components';
 import moment from 'moment';
+import { exportData, importData } from '../../utils/exportImport';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const scale = SCREEN_WIDTH / 320;
@@ -595,9 +596,17 @@ const HomeScreen = ({ navigation }: any) => {
     <View style={styles.mainContainer}>
       <View style={styles.header}>
         <Text style={styles.username}>{`Welcome ${name}`}</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
-        </TouchableOpacity>
+        <View style={styles.headerButtonsContainer}>
+          <TouchableOpacity style={styles.headerButton} onPress={() => exportData()} activeOpacity={0.7}>
+            <Ionicons name="download-outline" size={normalize(20)} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerButton} onPress={() => importData()} activeOpacity={0.7}>
+            <Ionicons name="upload-outline" size={normalize(20)} color="#FFFFFF" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <TabView
         navigationState={{
@@ -685,6 +694,19 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontWeight: 'bold',
   },
+  headerButtonsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerButton: {
+    padding: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#0A7075',
+    borderRadius: 5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   logoutButton: {
     padding: 8,
     paddingHorizontal: 25,
@@ -729,15 +751,15 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 45,
+    height: normalize(48),
     borderColor: '#0A7075',
     borderWidth: 1.5,
-    paddingHorizontal: 15,
-    borderRadius: 12,
+    paddingHorizontal: normalize(15),
+    borderRadius: normalize(12),
     backgroundColor: '#ffffff',
     color: '#031716',
-    fontSize: 15,
-    marginRight: 10,
+    fontSize: normalize(15),
+    marginRight: normalize(10),
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -751,9 +773,9 @@ const styles = StyleSheet.create({
     }),
   },
   searchButton: {
-    width: 45,
-    height: 45,
-    borderRadius: 12,
+    width: normalize(48),
+    height: normalize(48),
+    borderRadius: normalize(12),
     backgroundColor: '#0A7075',
     justifyContent: 'center',
     alignItems: 'center',
@@ -773,7 +795,7 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   scrollContent: {
-    paddingBottom: 20,
+    paddingBottom: Platform.OS === 'android' ? 10 : 20,
   },
   customerItem: {
     flexDirection: 'row',
@@ -825,14 +847,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   modalInput: {
-    height: 40,
+    height: normalize(48),
     borderColor: '#000000',
     borderWidth: 1,
-    marginBottom: 10,
-    paddingHorizontal: 10,
-    borderRadius: 10,
+    marginBottom: normalize(10),
+    paddingHorizontal: normalize(15),
+    borderRadius: normalize(10),
     backgroundColor: '#ffffff',
     color: '#031716',
+    fontSize: normalize(16),
   },
   modalButtonsContainer: {
     marginTop: 20,
@@ -841,9 +864,10 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     backgroundColor: '#0A7075',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    paddingVertical: normalize(14),
+    paddingHorizontal: normalize(20),
+    borderRadius: normalize(10),
+    minHeight: normalize(48),
     alignItems: 'center',
     flex: 1,
     marginHorizontal: 5,
@@ -947,7 +971,7 @@ const pickerStyles = StyleSheet.create({
     borderTopLeftRadius: normalize(24),
     borderTopRightRadius: normalize(24),
     padding: normalize(24),
-    paddingBottom: normalize(48),
+    paddingBottom: Platform.OS === 'android' ? normalize(24) : normalize(48),
     maxHeight: '85%',
     ...Platform.select({
       ios: {
